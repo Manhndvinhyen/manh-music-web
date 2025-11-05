@@ -385,7 +385,7 @@ function formatTime(seconds) {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
-window.playTrack = function (track, playlist = currentPlaylist, index = -1) {
+window.playTrack = async function (track, playlist = currentPlaylist, index = -1) {
     console.log('🎵 Attempting to play track:', track);
     
     if (!track || !track.file_url) {
@@ -435,8 +435,36 @@ window.playTrack = function (track, playlist = currentPlaylist, index = -1) {
         console.log('🔧 Fixed Supabase URL:', audioUrl);
     }
 
-    // FIX: Tạo audio element với error handling
+    // FIX: Validate URL resource type before creating audio element
     try {
+        // HEAD request to verify content-type (detect accidental HTML pages)
+        try {
+            const headResp = await fetch(audioUrl, { method: 'HEAD' });
+            const ct = headResp.headers.get('content-type') || '';
+            console.log('🔎 HEAD content-type for audioUrl:', ct);
+            if (ct.includes('text/html')) {
+                console.error('❌ Audio URL points to HTML (likely a page), aborting play:', audioUrl);
+                alert('Không thể phát bài hát: file trả về HTML thay vì file âm thanh. Kiểm tra file_url.');
+                return;
+            }
+        } catch (headErr) {
+            // HEAD may be blocked by some servers (CORS) — fallback to GET small range
+            console.warn('⚠️ HEAD request failed, attempting range GET to probe content-type', headErr);
+            try {
+                const rangeResp = await fetch(audioUrl, { method: 'GET', headers: { Range: 'bytes=0-1023' } });
+                const ct2 = rangeResp.headers.get('content-type') || '';
+                console.log('🔎 Range GET content-type for audioUrl:', ct2);
+                if (ct2.includes('text/html')) {
+                    console.error('❌ Audio URL points to HTML (via range GET), aborting play:', audioUrl);
+                    alert('Không thể phát bài hát: file trả về HTML thay vì file âm thanh. Kiểm tra file_url.');
+                    return;
+                }
+            } catch (rangeErr) {
+                console.warn('⚠️ Probe request failed, continuing to create Audio (last resort)', rangeErr);
+            }
+        }
+
+        // Tạo audio element với error handling
         currentAudio = new Audio(audioUrl);
         currentAudio.track = track;
         currentAudio.volume = volume;
@@ -837,7 +865,7 @@ window.renderRecommendations = async function() {
     }
 
     container.innerHTML = topTracks.map((t, i) => `
-        <div class="track-item playable-track" onclick="event.stopPropagation(); window.playTrack(${JSON.stringify(t)}, [], -1)">
+        <div class="track-item playable-track" onclick='event.stopPropagation(); window.playTrack(${JSON.stringify(t)}, [], -1)'>
             <div class="track-info">
                 <span class="track-index">${i + 1}</span>
                 <img src="${t.cover_url || '/assets/default-cover.webp'}" class="track-cover" onerror="this.src='/assets/default-cover.webp'">
@@ -2324,7 +2352,7 @@ async function loadRecentHistory() {
         }
 
         container.innerHTML = history.map((item, index) => `
-            <div class="track-item playable-track" onclick="event.stopPropagation(); window.playTrack(${JSON.stringify(item.tracks)}, [], -1)">
+            <div class="track-item playable-track" onclick='event.stopPropagation(); window.playTrack(${JSON.stringify(item.tracks)}, [], -1)'>
                 <div class="track-info">
                     <span class="track-index">${index + 1}</span>
                     <img src="${item.tracks.cover_url || '/assets/default-cover.webp'}" 
