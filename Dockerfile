@@ -1,20 +1,18 @@
-# Sử dụng image Node.js
+# Sử dụng Node 18
 FROM node:18
 
-# Tạo thư mục làm việc
 WORKDIR /app
 
-# Sao chép package.json và package-lock.json trước để cache deps
 COPY package*.json ./
 
-# Cài đặt dependencies (bao gồm vite)
 RUN npm install
 
-# Sao chép toàn bộ mã nguồn vào container
 COPY . .
 
-# Mở cổng 8080
+# Cài vite cục bộ (để đảm bảo có trong node_modules)
+RUN npm install vite --save-dev
+
 EXPOSE 8080
 
-# CHẠY VITE TRỰC TIẾP VỚI --host và --force
-CMD ["npx", "vite", "--host", "0.0.0.0", "--port", "8080", "--force"]
+# Sử dụng 0.0.0.0 để mở cổng thật ra ngoài
+CMD ["npx", "vite", "serve", "--host", "0.0.0.0", "--port", "8080"]
